@@ -11,7 +11,7 @@ var http = require('http');
 var phantomjsPath = require('phantomjs').path;
 
 /**
- * spawn pops a renderer off the queue and sends the request to it.
+ * spawn pops a request off the request queue and sends it to a member of the phantom process pool
  * The 'opts' to spawn may be just the current pool member number: {pool:1}
  * Other possible options include:
  *
@@ -25,7 +25,7 @@ var phantomjsPath = require('phantomjs').path;
 var spawn = function(opts) {
 	opts = opts || {};
 	var child;
-	var queue = [];
+	var requestQueue = [];
 
 	var fifoFile = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
 	if (opts.fifoDir) fifoFile = path.join(opts.fifoDir, fifoFile);
@@ -41,7 +41,7 @@ var spawn = function(opts) {
 			if (++retries >= (opts.maxRetries || 2)) {
 				cb(new Error('Too many retries'));
 				looping = false;
-				if (queue.length) loop();
+				if (requestQueue.length) loop();
 			} else {
 				timeout = setTimeout(timeoutFn, 5000);
 				timeout.unref();
@@ -59,7 +59,7 @@ var spawn = function(opts) {
 		var result = fs.createReadStream(fifoFile);
 		var cb = once(function(err, val) {
 			clearTimeout(timeout);
-			queue.shift().callback(err, val);
+			requestQueue.shift().callback(err, val);
 		});
 
 		result.once('readable', function() {
@@ -77,10 +77,12 @@ var spawn = function(opts) {
 			cb(new Error('Render failed (no data)'));
 
 			looping = false;
-			if (queue.length) loop();
+			if (requestQueue.length) loop();
 		});
 	};
 
+  // Ensure we have a child rendering process and return it.
+  // We can send our requests to it as JSON messages on its STDIN
 	var ensure = function() {
 		if (child) return child;
     var phantomJsArgs = [path.join(__dirname, 'phantom-process.js'), fifoFile];
@@ -113,8 +115,8 @@ var spawn = function(opts) {
 
 		child.on('exit', function() {
 			child = null;
-			if (!queue.length) return;
-			queue.forEach(function(el) {
+			if (!requestQueue.length) return;
+			requestQueue.forEach(function(el) {
 				ensure().stdin.write(el.message);
 			});
 		});
@@ -138,17 +140,19 @@ var spawn = function(opts) {
 			if (stream) stream.on('end', free);
 			else free();
 			cb(err, stream);
-			if (opts.debug) console.log('queue size: ', queue.length);
+			if (opts.debug) console.log('queue size: ', requestQueue.length);
 		};
 
+    // Create the fifo if it's not been created, and write our request to it.
+    // Push a copy of the the request and a "done()" callback on to requestQueue to keep track of it.
 		fifo(function(err) {
 			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+fifoFile+' exited with '+err) : err);
 			var msg = JSON.stringify(renderOpts)+'\n';
       console.log("MSG: "+msg);
-			queue.push({callback: done, message: msg, date: Date.now()});
+			requestQueue.push({callback: done, message: msg, date: Date.now()});
 			ensure().stdin.write(msg);
-			if (queue.length === 1) loop();
-			if (opts.debug) console.log('queue size: ', queue.length);
+			if (requestQueue.length === 1) loop();
+			if (opts.debug) console.log('queue size: ', requestQueue.length);
 		});
 	};
 
