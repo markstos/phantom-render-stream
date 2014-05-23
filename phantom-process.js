@@ -66,11 +66,14 @@ var forcePrintMedia = function() {
 
 var loop = function() {
 	var line = system.stdin.readLine();
+
+  // If there's no more data, clean-up the FIFO file and close down phantom.
 	if (!line.trim()) {
 		fs.remove(fifoFile);
 		return phantom.exit(0);
 	}
 
+  // If we can't parse the data returned,  clean up the FIFO file and close down phantom
 	try {
 		line = JSON.parse(line);
 	} catch (err) {
