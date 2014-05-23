@@ -148,8 +148,8 @@ var spawn = function(opts) {
 	return ret;
 };
 
-module.exports = function(opts) {
-	opts = opts || {};
+module.exports = function(defaultOpts) {
+	var opts = defaultOpts || {};
 	opts.pool = opts.pool || 1;
 
   // Create a pool size equal to the number provided in opts.pool
