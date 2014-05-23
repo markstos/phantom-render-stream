@@ -10,14 +10,26 @@ var once = require('once');
 var http = require('http');
 var phantomjsPath = require('phantomjs').path;
 
+/**
+ * spawn pops a renderer off the queue and sends the request to it.
+ * The 'opts' to spawn may be just the current pool member number: {pool:1}
+ * Other possible options include:
+ *
+ *  fifoDir     (defaults to os.TmpDir)
+ *  maxRetries  (defaults to 2)
+ *  timeout     (defaults to 5 seconds)
+ *  debug       (defaults to false)
+ *
+ */
+
 var spawn = function(opts) {
 	opts = opts || {};
 	var child;
 	var queue = [];
 
-	var filename = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
-	if (opts.fifoDir) filename = path.join(opts.fifoDir, filename);
-	else filename = path.join(os.tmpDir(), filename);
+	var fifoFile = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
+	if (opts.fifoDir) fifoFile = path.join(opts.fifoDir, fifoFile);
+	else fifoFile = path.join(os.tmpDir(), fifoFile);
 
 	var looping = false;
 	var loop = function() {
@@ -44,7 +56,7 @@ var spawn = function(opts) {
 		}
 
 
-		var result = fs.createReadStream(filename);
+		var result = fs.createReadStream(fifoFile);
 		var cb = once(function(err, val) {
 			clearTimeout(timeout);
 			queue.shift().callback(err, val);
@@ -71,7 +83,7 @@ var spawn = function(opts) {
 
 	var ensure = function() {
 		if (child) return child;
-    var phantomJsArgs = [path.join(__dirname, 'phantom-process.js'), filename];
+    var phantomJsArgs = [path.join(__dirname, 'phantom-process.js'), fifoFile];
 		child = cp.spawn(phantomjsPath, phantomJsArgs);
 
 		var onerror = once(function() {
@@ -110,7 +122,7 @@ var spawn = function(opts) {
 	};
 
 	var fifo = thunky(function(cb) {
-		cp.spawn('mkfifo', [filename], { stdio: 'inherit' }).on('exit', cb).on('error', cb);
+		cp.spawn('mkfifo', [fifoFile], { stdio: 'inherit' }).on('exit', cb).on('error', cb);
 	});
 
 	var free = function() {
@@ -130,7 +142,7 @@ var spawn = function(opts) {
 		};
 
 		fifo(function(err) {
-			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+filename+' exited with '+err) : err);
+			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+fifoFile+' exited with '+err) : err);
 			var msg = JSON.stringify(renderOpts)+'\n';
       console.log("MSG: "+msg);
 			queue.push({callback: done, message: msg, date: Date.now()});
@@ -143,7 +155,7 @@ var spawn = function(opts) {
 	ret.using = 0;
 	ret.destroy = function(cb) {
 		if (child) child.kill();
-		fs.unlink(filename, function() {
+		fs.unlink(fifoFile, function() {
 			if (cb) cb();
 		});
 	};
