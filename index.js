@@ -25,6 +25,12 @@ var phantomjsPath = require('phantomjs').path;
 var spawn = function(opts) {
 	opts = opts || {};
 	var child;
+
+  // Each queued request is represented by an object with the following keys:
+  //    callback -- a function to call with when done
+  //    message  -- JSON structure used to form the request to Phantom JS
+  //    date     -- current date, just for reference.
+  // Each member of the phantom request pool has its own request queue.
 	var requestQueue = [];
 
 	var fifoFile = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
@@ -102,12 +108,13 @@ var spawn = function(opts) {
 		child.unref();
 
 		if (opts.debug) {
-			child.stderr.pipe(process.stdout);
 			child.stdout.pipe(process.stdout);
 		} else {
-			child.stderr.resume();
 			child.stdout.resume();
 		}
+
+    // Always make the child's stderr available for better diagnostics.
+    child.stderr.pipe(process.stderr);
 
     child.on('error', function(error) {
       throw new Error("Failed to spawn Phantom. Error was: '"+error+"'. System call was: "+phantomjsPath+' '+phantomJsArgs.join(' '));
@@ -176,7 +183,7 @@ module.exports = function(defaultOpts) {
 		phantomPool.push(spawn(opts));
 	}
 
-  // Return the next pool member to use.
+  // Find the phantom pool member with the shortest queue and send our request to it.
 	var select = function() {
 		return phantomPool.reduce(function(a, b) {
 			return a.using <= b.using ? a : b;

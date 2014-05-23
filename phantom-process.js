@@ -63,6 +63,9 @@ var forcePrintMedia = function() {
 	});
 };
 
+// Requests we make to PhantomJS are received and process here.
+// Each requests as a single line of stringified JSON standard in.
+// It unpacks to an object corresponding to a call to render(), with 'url' added as a key.
 var loop = function() {
 	var line = system.stdin.readLine();
 
@@ -73,6 +76,7 @@ var loop = function() {
 	}
 
   // If we can't parse the data returned,  clean up the FIFO file and close down phantom
+  // This "shouldn't happen" because we are supplying and stringify the JSON ourselves.
 	try {
 		line = JSON.parse(line);
 	} catch (err) {
@@ -96,10 +100,70 @@ var loop = function() {
 	if (line.userAgent) page.settings.userAgent = line.userAgent;
 	if (line.crop) page.clipRect = page.viewportSize;
 
-	page.open(line.url, function(requestStatus) {
+  page.onResourceError = function(resourceError) {
+    page.resourceError = resourceError;
+  };
+
+    // Need detailed debugging? Uncomment this.
+    // page.onResourceRequested = function (request) {
+    //     system.stderr.writeLine('= onResourceRequested()');
+    //     system.stderr.writeLine('  request: ' + JSON.stringify(request, undefined, 4));
+    // };
+    //  
+    // page.onResourceReceived = function(response) {
+    //     system.stderr.writeLine('= onResourceReceived()' );
+    //     system.stderr.writeLine('  id: ' + response.id + ', stage: "' + response.stage + '", response: ' + JSON.stringify(response));
+    // };
+    //  
+    // page.onLoadStarted = function() {
+    //     system.stderr.writeLine('= onLoadStarted()');
+    //     var currentUrl = page.evaluate(function() {
+    //         return window.location.href;
+    //     });
+    //     system.stderr.writeLine('  leaving url: ' + currentUrl);
+    // };
+    //  
+    // page.onLoadFinished = function(status) {
+    //     system.stderr.writeLine('= onLoadFinished()');
+    //     system.stderr.writeLine('  status: ' + status);
+    // };
+    //  
+    // page.onNavigationRequested = function(url, type, willNavigate, main) {
+    //     system.stderr.writeLine('= onNavigationRequested');
+    //     system.stderr.writeLine('  destination_url: ' + url);
+    //     system.stderr.writeLine('  type (cause): ' + type);
+    //     system.stderr.writeLine('  will navigate: ' + willNavigate);
+    //     system.stderr.writeLine('  from page\'s main frame: ' + main);
+    // };
+    //  
+    // page.onResourceError = function(resourceError) {
+    //     system.stderr.writeLine('= onResourceError()');
+    //     system.stderr.writeLine('  - unable to load url: "' + resourceError.url + '"');
+    //     system.stderr.writeLine('  - error code: ' + resourceError.errorCode + ', description: ' + resourceError.errorString );
+    // };
+    //  
+    // page.onError = function(msg, trace) {
+    //     system.stderr.writeLine('= onError()');
+    //     var msgStack = ['  ERROR: ' + msg];
+    //     if (trace) {
+    //         msgStack.push('  TRACE:');
+    //         trace.forEach(function(t) {
+    //             msgStack.push('    -> ' + t.file + ': ' + t.line + (t.function ? ' (in function "' + t.function + '")' : ''));
+    //         });
+    //     }
+    //     system.stderr.writeLine(msgStack.join('\n'));
+    // };
+
+    page.open(line.url, function(requestStatus) {
     // If there's a failure, communicate that through the FIFO by writing just the "!" character.
+    // Also, log to Phantom's stderr, which will get piped into the parent's Stderr
+    // Note that some connection failures will result an undefined 'resourceError'
 		if (requestStatus !== 'success') {
-			fs.write(fifoFile, '!', 'w');
+      system.stderr.write(
+        "Phantom Error opening url \"" + line.url
+        + "\" Error Code: " + page.resourceError.errorCode + ", Error String: " + page.resourceError.errorString);
+
+			fs.write(fifoFile,"!", 'w');
 			page = null;
 			loop();
 			return;

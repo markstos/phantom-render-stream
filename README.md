@@ -85,6 +85,16 @@ Here is an example to illustrate it better.
 
 ```
 
+## Troubleshooting
+
+You can pass `debug:true` as an option to turn on additional diagnostics including:
+
+ * piping STDOUT from the phantom processes to STDOUT of this parent process
+ * Printing out the queue size of periodically.
+
+For extensive detail on what Phantom is doing, there is also some commented out code
+in phantom-process.js that can be enabled by commenting it in for now.
+
 ## OS Dependencies
 
 We `mkfifo` which is known to exist and work on OS X and Linux, but may not work other plaforms,
