@@ -117,9 +117,11 @@ var spawn = function(opts) {
 		ret.using--;
 	};
 
-	var ret = function(ropts, cb) {
+  // The return value of this pool member.
+	var ret = function(renderOpts, cb) {
 		ret.using++;
 
+    // When done, reduce the number of of active pool members by one.
 		var done = function(err, stream) {
 			if (stream) stream.on('end', free);
 			else free();
@@ -129,7 +131,8 @@ var spawn = function(opts) {
 
 		fifo(function(err) {
 			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+filename+' exited with '+err) : err);
-			var msg = JSON.stringify(ropts)+'\n';
+			var msg = JSON.stringify(renderOpts)+'\n';
+      console.log("MSG: "+msg);
 			queue.push({callback: done, message: msg, date: Date.now()});
 			ensure().stdin.write(msg);
 			if (queue.length === 1) loop();
@@ -164,11 +167,11 @@ module.exports = function(defaultOpts) {
 		});
 	};
 
-	var render = function(url, ropts) {
-		ropts = xtend(opts, ropts);
-		ropts.url = url;
+	var render = function(url, renderOpts) {
+		renderOpts = xtend(opts, renderOpts);
+		renderOpts.url = url;
 		var pt = stream.PassThrough();
-		select()(ropts, function(err, stream) {
+		select()(renderOpts, function(err, stream) {
 			if (err) return pt.emit('error', err);
 			if (destroyed) return stream.destroy();
 			stream.pipe(pt);
