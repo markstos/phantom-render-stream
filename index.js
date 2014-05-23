@@ -167,18 +167,20 @@ module.exports = function(defaultOpts) {
 	var opts = defaultOpts || {};
 	opts.pool = opts.pool || 1;
 
-  // Create a pool size equal to the number provided in opts.pool
-	var pool = [];
+  // Create a pool of Phantom processes size  the number provided in opts.pool
+	var phantomPool = [];
 	for (var i = 0; i < opts.pool; i++) {
-		pool.push(spawn(opts));
+		phantomPool.push(spawn(opts));
 	}
 
+  // Return the next pool member to use.
 	var select = function() {
-		return pool.reduce(function(a, b) {
+		return phantomPool.reduce(function(a, b) {
 			return a.using <= b.using ? a : b;
 		});
 	};
 
+  // Move the 'url' to the options and pass it to a pool member to render.
 	var render = function(url, renderOpts) {
 		renderOpts = xtend(opts, renderOpts);
 		renderOpts.url = url;
@@ -204,7 +206,7 @@ module.exports = function(defaultOpts) {
 
 	render.destroy = function(cb) {
 		var next = afterAll(cb);
-		pool.forEach(function(ps) {
+		phantomPool.forEach(function(ps) {
 			ps.destroy(next());
 		});
 	};
