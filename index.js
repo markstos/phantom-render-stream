@@ -148,7 +148,6 @@ var spawn = function(opts) {
 		fifo(function(err) {
 			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+fifoFile+' exited with '+err) : err);
 			var msg = JSON.stringify(renderOpts)+'\n';
-      console.log("MSG: "+msg);
 			requestQueue.push({callback: done, message: msg, date: Date.now()});
 			ensure().stdin.write(msg);
 			if (requestQueue.length === 1) loop();
