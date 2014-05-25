@@ -11,31 +11,24 @@ var http = require('http');
 var phantomjsPath = require('phantomjs').path;
 
 /**
- * spawn pops a request off the request queue and sends it to a member of the phantom process pool
- * The 'opts' to spawn may be just the current pool member number: {pool:1}
- * Other possible options include:
- *
- *  fifoDir     (defaults to os.TmpDir)
- *  maxRetries  (defaults to 2)
- *  timeout     (defaults to 5 seconds)
- *  debug       (defaults to false)
- *
+ * spawn pops a request off the request queue and sends it to a member of the phantom process pool.
+ * See module.exports for all opts and defaults.
  */
 
 var spawn = function(opts) {
-	opts = opts || {};
 	var child;
 
-  // Each queued request is represented by an object with the following keys:
-  //    callback -- a function to call with when done
-  //    message  -- JSON structure used to form the request to Phantom JS
-  //    date     -- current date, just for reference.
-  // Each member of the phantom request pool has its own request queue.
+	// Each queued request is represented by an object with the following keys:
+	//		callback -- a function to call with when done
+	//		message  -- JSON structure used to form the request to Phantom JS
+	//		date		 -- current date, just for reference.
+	// Each member of the phantom request pool has its own request queue.
 	var requestQueue = [];
 
-	var fifoFile = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
-	if (opts.fifoDir) fifoFile = path.join(opts.fifoDir, fifoFile);
-	else fifoFile = path.join(os.tmpDir(), fifoFile);
+	var fifoFile = path.join(
+			 opts.fifoDir,
+			'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2)
+	);
 
 	var looping = false;
 	var loop = function() {
@@ -44,7 +37,7 @@ var spawn = function(opts) {
 
 		var retries = 0;
 		var timeoutFn = function() {
-			if (++retries >= (opts.maxRetries || 2)) {
+			if (++retries >= opts.maxRetries) {
 				cb(new Error('Too many retries'));
 				looping = false;
 				if (requestQueue.length) loop();
@@ -53,14 +46,10 @@ var spawn = function(opts) {
 				timeout.unref();
 			}
 			if (child) child.kill();
-			
-		};
-		var timeout; 
-		if (opts.timeout) {
-			timeout = setTimeout(timeoutFn, opts.timeout);
-			timeout.unref();
-		}
 
+		};
+		var timeout = setTimeout(timeoutFn, opts.timeout);
+		timeout.unref();
 
 		var result = fs.createReadStream(fifoFile);
 		var cb = once(function(err, val) {
@@ -70,7 +59,7 @@ var spawn = function(opts) {
 
 		result.once('readable', function() {
 			var first = result.read(2) || result.read(1);
-      // Receiving exactly a "!" back from phantom-process.js indicates failure.
+			// Receiving exactly a "!" back from phantom-process.js indicates failure.
 			if (first && first.toString() === '!') return cb(new Error('Render failed'));
 
 			result.unshift(first);
@@ -87,11 +76,11 @@ var spawn = function(opts) {
 		});
 	};
 
-  // Ensure we have a child rendering process and return it.
-  // We can send our requests to it as JSON messages on its STDIN
+	// Ensure we have a child rendering process and return it.
+	// We can send our requests to it as JSON messages on its STDIN
 	var ensure = function() {
 		if (child) return child;
-    var phantomJsArgs = [path.join(__dirname, 'phantom-process.js'), fifoFile];
+		var phantomJsArgs = opts.phantomFlags.concat(path.join(__dirname, 'phantom-process.js'), fifoFile);
 		child = cp.spawn(phantomjsPath, phantomJsArgs);
 
 		var onerror = once(function() {
@@ -113,12 +102,12 @@ var spawn = function(opts) {
 			child.stdout.resume();
 		}
 
-    // Always make the child's stderr available for better diagnostics.
-    child.stderr.pipe(process.stderr);
+		// Always make the child's stderr available for better diagnostics.
+		child.stderr.pipe(process.stderr);
 
-    child.on('error', function(error) {
-      throw new Error("Failed to spawn Phantom. Error was: '"+error+"'. System call was: "+phantomjsPath+' '+phantomJsArgs.join(' '));
-    });
+		child.on('error', function(error) {
+			throw new Error("Failed to spawn Phantom. Error was: '"+error+"'. System call was: "+phantomjsPath+' '+phantomJsArgs.join(' '));
+		});
 
 		child.on('exit', function() {
 			child = null;
@@ -138,11 +127,11 @@ var spawn = function(opts) {
 		ret.using--;
 	};
 
-  // The return value of this pool member.
+	// The return value of this pool member.
 	var ret = function(renderOpts, cb) {
 		ret.using++;
 
-    // When done, reduce the number of of active pool members by one.
+		// When done, reduce the number of of active pool members by one.
 		var done = function(err, stream) {
 			if (stream) stream.on('end', free);
 			else free();
@@ -150,8 +139,8 @@ var spawn = function(opts) {
 			if (opts.debug) console.log('queue size: ', requestQueue.length);
 		};
 
-    // Create the fifo if it's not been created, and write our request to it.
-    // Push a copy of the the request and a "done()" callback on to requestQueue to keep track of it.
+		// Create the fifo if it's not been created, and write our request to it.
+		// Push a copy of the the request and a "done()" callback on to requestQueue to keep track of it.
 		fifo(function(err) {
 			if (err) return done(typeof err === 'number' ? new Error('mkfifo '+fifoFile+' exited with '+err) : err);
 			var msg = JSON.stringify(renderOpts)+'\n';
@@ -173,24 +162,33 @@ var spawn = function(opts) {
 	return ret;
 };
 
-module.exports = function(defaultOpts) {
-	var opts = defaultOpts || {};
-	opts.pool = opts.pool || 1;
+module.exports = function(userOpts) {
 
-  // Create a pool of Phantom processes size  the number provided in opts.pool
+	var defaultOpts = {
+		pool				: 1,
+		maxRetries	: 2,
+		fifoDir			: os.tmpDir(),
+		timeout			: 5000, // milliseconds
+		debug				: false,
+		phantomFlags: [],
+	};
+
+	var opts = xtend(defaultOpts,userOpts);
+
+	// Create a pool of Phantom processes size	the number provided in opts.pool
 	var phantomPool = [];
 	for (var i = 0; i < opts.pool; i++) {
 		phantomPool.push(spawn(opts));
 	}
 
-  // Find the phantom pool member with the shortest queue and send our request to it.
+	// Find the phantom pool member with the shortest queue and send our request to it.
 	var select = function() {
 		return phantomPool.reduce(function(a, b) {
 			return a.using <= b.using ? a : b;
 		});
 	};
 
-  // Move the 'url' to the options and pass it to a pool member to render.
+	// Move the 'url' to the options and pass it to a pool member to render.
 	var render = function(url, renderOpts) {
 		renderOpts = xtend(opts, renderOpts);
 		renderOpts.url = url;

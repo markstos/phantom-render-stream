@@ -30,6 +30,7 @@ var render = phantom({
 	format: 'jpeg', // the default output format
 	width: 1280, // changes the width size. default to 1280
 	height: 800 // changes the height size. default to 960
+  phantomFlags: [], // extra command flags to pass to Phantom
 });
 ```
 
@@ -38,6 +39,9 @@ Or override the options for each render stream
 ``` js
 render(myUrl, {format:'jpeg', width: 1280, height: 960}).pipe(...)
 ```
+
+As an exception, you can't override the `phantomFlags` for each stream, as
+`phantomjs` as an existing phantom process may be re-used.
 
 ## Supported output formats
 
@@ -102,6 +106,11 @@ You can pass `debug:true` as an option to turn on additional diagnostics includi
 
  * piping STDOUT from the phantom processes to STDOUT of this parent process
  * Printing out the queue size of periodically.
+
+If you are getting undefined error codes and responses when attempting to
+render, it's likely a connection issue of some sort. If the URL uses SSL, adding
+`--ignore-ssl-errors=true` to phantomFlags may help. You also try adding `--debug=true` to
+the `phantomFlags` array.
 
 For extensive detail on what Phantom is doing, there is also some commented out code
 in phantom-process.js that can be enabled by commenting it in for now.
