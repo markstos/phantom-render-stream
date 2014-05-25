@@ -30,7 +30,7 @@ var render = phantom({
 	format: 'jpeg', // the default output format
 	width: 1280, // changes the width size. default to 1280
 	height: 800 // changes the height size. default to 960
-  phantomFlags: [], // extra command flags to pass to Phantom
+	phantomFlags: [], // extra command flags to pass to Phantom
 });
 ```
 
@@ -91,10 +91,10 @@ Here is an example to illustrate it better.
 </body>
 ...
 <script type="text/javascript">
-  doSomeAjaxLoading(function() {
-    doSomeRendering();
+	doSomeAjaxLoading(function() {
+		doSomeRendering();
 	window.renderable = true;
-  })
+	})
 </script>
 </html>
 
