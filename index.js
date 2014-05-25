@@ -46,7 +46,7 @@ var spawn = function(opts) {
 				timeout.unref();
 			}
 			if (child) child.kill();
-			
+
 		};
 		var timeout = setTimeout(timeoutFn, opts.timeout);
 		timeout.unref();
@@ -80,7 +80,7 @@ var spawn = function(opts) {
   // We can send our requests to it as JSON messages on its STDIN
 	var ensure = function() {
 		if (child) return child;
-    var phantomJsArgs = [path.join(__dirname, 'phantom-process.js'), fifoFile];
+    var phantomJsArgs = opts.phantomFlags.concat(path.join(__dirname, 'phantom-process.js'), fifoFile);
 		child = cp.spawn(phantomjsPath, phantomJsArgs);
 
 		var onerror = once(function() {
@@ -165,11 +165,12 @@ var spawn = function(opts) {
 module.exports = function(userOpts) {
 
   var defaultOpts = {
-    pool       : 1,
-    maxRetries : 2,
-    fifoDir    : os.tmpDir(),
-    timeout    : 5000, // milliseconds
-    debug      : false,
+    pool        : 1,
+    maxRetries  : 2,
+    fifoDir     : os.tmpDir(),
+    timeout     : 5000, // milliseconds
+    debug       : false,
+		phantomFlags: [],
   };
 
 	var opts = xtend(defaultOpts,userOpts);
