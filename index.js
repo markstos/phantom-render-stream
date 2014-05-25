@@ -11,19 +11,11 @@ var http = require('http');
 var phantomjsPath = require('phantomjs').path;
 
 /**
- * spawn pops a request off the request queue and sends it to a member of the phantom process pool
- * The 'opts' to spawn may be just the current pool member number: {pool:1}
- * Other possible options include:
- *
- *  fifoDir     (defaults to os.TmpDir)
- *  maxRetries  (defaults to 2)
- *  timeout     (defaults to 5 seconds)
- *  debug       (defaults to false)
- *
+ * spawn pops a request off the request queue and sends it to a member of the phantom process pool.
+ * See module.exports for all opts and defaults.
  */
 
 var spawn = function(opts) {
-	opts = opts || {};
 	var child;
 
   // Each queued request is represented by an object with the following keys:
@@ -33,9 +25,10 @@ var spawn = function(opts) {
   // Each member of the phantom request pool has its own request queue.
 	var requestQueue = [];
 
-	var fifoFile = 'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2);
-	if (opts.fifoDir) fifoFile = path.join(opts.fifoDir, fifoFile);
-	else fifoFile = path.join(os.tmpDir(), fifoFile);
+  var fifoFile = path.join(
+       opts.fifoDir,
+      'phantom-queue-' + process.pid + '-' + Math.random().toString(36).slice(2)
+  );
 
 	var looping = false;
 	var loop = function() {
@@ -44,7 +37,7 @@ var spawn = function(opts) {
 
 		var retries = 0;
 		var timeoutFn = function() {
-			if (++retries >= (opts.maxRetries || 2)) {
+			if (++retries >= opts.maxRetries) {
 				cb(new Error('Too many retries'));
 				looping = false;
 				if (requestQueue.length) loop();
@@ -55,12 +48,8 @@ var spawn = function(opts) {
 			if (child) child.kill();
 			
 		};
-		var timeout; 
-		if (opts.timeout) {
-			timeout = setTimeout(timeoutFn, opts.timeout);
-			timeout.unref();
-		}
-
+		var timeout = setTimeout(timeoutFn, opts.timeout);
+		timeout.unref();
 
 		var result = fs.createReadStream(fifoFile);
 		var cb = once(function(err, val) {
@@ -173,9 +162,17 @@ var spawn = function(opts) {
 	return ret;
 };
 
-module.exports = function(defaultOpts) {
-	var opts = defaultOpts || {};
-	opts.pool = opts.pool || 1;
+module.exports = function(userOpts) {
+
+  var defaultOpts = {
+    pool       : 1,
+    maxRetries : 2,
+    fifoDir    : os.tmpDir(),
+    timeout    : 5000, // milliseconds
+    debug      : false,
+  };
+
+	var opts = xtend(defaultOpts,userOpts);
 
   // Create a pool of Phantom processes size  the number provided in opts.pool
 	var phantomPool = [];
